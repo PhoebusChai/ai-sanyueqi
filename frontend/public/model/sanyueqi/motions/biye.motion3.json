@@ -1,0 +1,36 @@
+{
+	"Version": 3,
+	"Meta": {
+		"Duration": 2.0,
+		"Fps": 30.0,
+		"Loop": true,
+		"AreBeziersRestricted": true,
+		"CurveCount": 4,
+		"TotalSegmentCount": 12,
+		"TotalPointCount": 36,
+		"UserDataCount": 0,
+		"TotalUserDataSize": 0
+	},
+	"Curves": [
+		{
+			"Target": "Parameter",
+			"Id": "Param27",
+			"Segments": [0, 0, 1, 0.3, 0, 0.6, 1, 1.2, 1, 1, 1.6, 1, 2.0, 0]
+		},
+		{
+			"Target": "Parameter",
+			"Id": "ParamEyeLSmile",
+			"Segments": [0, 0, 1, 0.3, 0, 0.6, 1, 1.2, 1, 1, 1.6, 1, 2.0, 0]
+		},
+		{
+			"Target": "Parameter",
+			"Id": "ParamEyeRSmile",
+			"Segments": [0, 0, 1, 0.3, 0, 0.6, 1, 1.2, 1, 1, 1.6, 1, 2.0, 0]
+		},
+		{
+			"Target": "Parameter",
+			"Id": "ParamMouthForm",
+			"Segments": [0, 0, 1, 0.3, 0, 0.6, 1, 1.2, 1, 1, 1.6, 1, 2.0, 0]
+		}
+	]
+}

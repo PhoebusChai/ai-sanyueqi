@@ -1,0 +1,156 @@
+{
+  "mcpServers": {
+    "system": {
+      "baseUrl": "http://localhost:8001",
+      "tools": [
+        {
+          "name": "get_system_time",
+          "description": "获取当前系统时间，包括日期、时间、星期、时区等信息。当用户询问现在几点、今天日期、星期几等时间相关问题时使用。",
+          "endpoint": "/system/time",
+          "method": "GET",
+          "parameters": {}
+        },
+        {
+          "name": "open_application",
+          "description": "智能打开电脑上安装的任意应用程序。会自动搜索系统中的应用，支持中英文名称。当用户要求打开任何应用、软件、程序时都应该调用此工具，例如：打开微信、打开哔哩哔哩、打开QQ、打开浏览器、打开记事本等。",
+          "endpoint": "/system/open-app",
+          "method": "POST",
+          "parameters": {
+            "app_name": {
+              "type": "string",
+              "description": "应用名称，支持中英文，如：微信、哔哩哔哩、QQ、Chrome、记事本、网易云音乐等"
+            }
+          }
+        },
+        {
+          "name": "delayed_task",
+          "description": "创建延时任务，在指定秒数后执行某个动作。支持的动作：open_app(打开应用)、shutdown(关机)、restart(重启)、sleep(睡眠)、lock(锁屏)、message(显示提醒消息)。当用户说'5分钟后打开微信'、'10秒后提醒我'、'1小时后关机'等需要延时执行的任务时使用。",
+          "endpoint": "/system/delay",
+          "method": "POST",
+          "parameters": {
+            "action": {
+              "type": "string",
+              "description": "要执行的动作：open_app、shutdown、restart、sleep、lock、message"
+            },
+            "delay_seconds": {
+              "type": "integer",
+              "description": "延迟秒数，如60表示1分钟，3600表示1小时"
+            },
+            "params": {
+              "type": "object",
+              "description": "动作参数。open_app需要{app_name:'应用名'}，message需要{message:'提醒内容'}"
+            }
+          }
+        },
+        {
+          "name": "search_file",
+          "description": "在电脑上搜索文件。默认搜索桌面、文档、下载、图片、视频、音乐等常用文件夹。当用户说'帮我找一下xxx文件'、'搜索xxx'、'我的xxx文件在哪'等需要查找文件时使用。",
+          "endpoint": "/file/search",
+          "method": "POST",
+          "parameters": {
+            "filename": {
+              "type": "string",
+              "description": "要搜索的文件名或关键词，支持模糊匹配"
+            },
+            "search_path": {
+              "type": "string",
+              "description": "可选，指定搜索路径"
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "可选，最大返回结果数，默认10"
+            }
+          }
+        },
+        {
+          "name": "open_file",
+          "description": "用默认程序打开指定路径的文件。当用户提供了文件完整路径并要求打开时使用，或者在搜索到文件后用户要求打开时使用。",
+          "endpoint": "/file/open",
+          "method": "POST",
+          "parameters": {
+            "file_path": {
+              "type": "string",
+              "description": "文件的完整路径"
+            }
+          }
+        },
+        {
+          "name": "create_file",
+          "description": "创建新文件。当用户说'创建一个xxx文件'、'新建xxx.txt'、'帮我建一个文件'等需要创建文件时使用。会自动创建父目录。",
+          "endpoint": "/file/create",
+          "method": "POST",
+          "parameters": {
+            "file_path": {
+              "type": "string",
+              "description": "要创建的文件完整路径，如 D:\\test\\hello.txt"
+            },
+            "content": {
+              "type": "string",
+              "description": "可选，文件初始内容，默认为空"
+            }
+          }
+        },
+        {
+          "name": "read_file",
+          "description": "读取文件内容。当用户说'读取xxx文件'、'看看xxx文件里写了什么'、'打开并读取xxx'等需要查看文件内容时使用。仅支持文本文件。",
+          "endpoint": "/file/read",
+          "method": "POST",
+          "parameters": {
+            "file_path": {
+              "type": "string",
+              "description": "要读取的文件完整路径"
+            },
+            "max_size": {
+              "type": "integer",
+              "description": "可选，最大读取字节数，默认102400(100KB)"
+            }
+          }
+        },
+        {
+          "name": "search_folder",
+          "description": "在电脑上搜索文件夹。当用户说'帮我找一下xxx文件夹'、'xxx目录在哪'等需要查找文件夹时使用。",
+          "endpoint": "/folder/search",
+          "method": "POST",
+          "parameters": {
+            "folder_name": {
+              "type": "string",
+              "description": "要搜索的文件夹名或关键词，支持模糊匹配"
+            },
+            "search_path": {
+              "type": "string",
+              "description": "可选，指定搜索路径"
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "可选，最大返回结果数，默认10"
+            }
+          }
+        },
+        {
+          "name": "open_folder",
+          "description": "在资源管理器中打开指定的文件夹。当用户说'打开xxx文件夹'、'打开xxx目录'时使用。如果用户没有提供完整路径，应先用search_folder搜索，再用此工具打开。",
+          "endpoint": "/folder/open",
+          "method": "POST",
+          "parameters": {
+            "folder_path": {
+              "type": "string",
+              "description": "文件夹的完整路径"
+            }
+          }
+        },
+        {
+          "name": "create_folder",
+          "description": "创建新文件夹。当用户说'创建一个xxx文件夹'、'新建xxx目录'、'帮我建一个文件夹'等需要创建文件夹时使用。支持创建多级目录。",
+          "endpoint": "/folder/create",
+          "method": "POST",
+          "parameters": {
+            "folder_path": {
+              "type": "string",
+              "description": "要创建的文件夹完整路径，如 D:\\projects\\new_folder"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

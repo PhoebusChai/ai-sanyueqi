@@ -1,0 +1,69 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "march7th.moc3",
+		"Textures": [
+			"march7th.4096/texture_00.png",
+			"march7th.4096/texture_01.png"
+		],
+		"Physics": "march7th.physics3.json",
+		"DisplayInfo": "march7th.cdi3.json",
+		"Motions": {
+			"Idle": [
+				{ "File": "motions/smile.motion3.json" }
+			],
+			"Tap": [
+				{ "File": "motions/zhaoxiang.motion3.json" }
+			],
+			"Zhaiyan": [
+				{ "File": "motions/zhaiyan.motion3.json" }
+			],
+			"Wulian": [
+				{ "File": "motions/wulian.motion3.json" }
+			],
+			"Star": [
+				{ "File": "motions/star.motion3.json" }
+			],
+			"Blush": [
+				{ "File": "motions/blush.motion3.json" }
+			],
+			"Cry": [
+				{ "File": "motions/cry.motion3.json" }
+			],
+			"Nod": [
+				{ "File": "motions/nod.motion3.json" }
+			],
+			"Smile": [
+				{ "File": "motions/smile.motion3.json" }
+			],
+			"Shake": [
+				{ "File": "motions/shake.motion3.json" }
+			],
+			"Biye": [
+				{ "File": "motions/biye.motion3.json" }
+			]
+		},
+		"Expressions": [
+			{ "Name": "exp1", "File": "exp/1.exp3.json" },
+			{ "Name": "exp2", "File": "exp/2.exp3.json" },
+			{ "Name": "exp3", "File": "exp/3.exp3.json" },
+			{ "Name": "exp5", "File": "exp/5.exp3.json" },
+			{ "Name": "exp6", "File": "exp/6.exp3.json" },
+			{ "Name": "exp7", "File": "exp/7.exp3.json" },
+			{ "Name": "exp8", "File": "exp/8.exp3.json" },
+			{ "Name": "exp9", "File": "exp/9.exp3.json" }
+		]
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": ["ParamEyeLOpen", "ParamEyeROpen"]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}
