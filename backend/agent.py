@@ -96,9 +96,25 @@ class Agent:
         # 执行每个工具
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
-            arguments = json.loads(tool_call.function.arguments or "{}")
             
-            print(f"  [工具]: {tool_name}({json.dumps(arguments, ensure_ascii=False)})")
+            # 解析参数，处理可能的 JSON 格式问题
+            try:
+                arguments = json.loads(tool_call.function.arguments or "{}")
+            except json.JSONDecodeError as e:
+                # 尝试修复常见的 JSON 问题（未转义的换行符）
+                try:
+                    fixed_args = tool_call.function.arguments.replace('\n', '\\n').replace('\r', '\\r')
+                    arguments = json.loads(fixed_args)
+                except:
+                    print(f"  [错误]: JSON 解析失败 - {e}")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": f"参数解析失败: {str(e)}"
+                    })
+                    continue
+            
+            print(f"  [工具]: {tool_name}({json.dumps(arguments, ensure_ascii=False)[:200]})")
             result = self.tool_manager.call_tool(tool_name, arguments)
             print(f"  [结果]: {result[:100]}..." if len(result) > 100 else f"  [结果]: {result}")
             

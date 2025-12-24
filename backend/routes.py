@@ -17,6 +17,21 @@ class ChatResponse(BaseModel):
     reply: str
 
 
+class MemoryRequest(BaseModel):
+    content: str
+    memory_type: str = "fact"
+    importance: int = 1
+    keywords: list = []
+
+
+class NicknameRequest(BaseModel):
+    nickname: str
+
+
+class AffectionRequest(BaseModel):
+    delta: int
+
+
 @router.get("/")
 async def root():
     return {"message": "三月七桌宠 API 运行中~"}
@@ -76,3 +91,62 @@ async def reload_tools():
     """重新加载工具配置"""
     tools = services.reload_tools()
     return {"message": "工具配置已重新加载", "tools": tools}
+
+
+# ========== 记忆系统 API ==========
+
+@router.get("/memory")
+async def list_memories(limit: int = 20):
+    """获取所有记忆"""
+    from memory import memory_manager
+    return {"memories": memory_manager.get_all_memories(limit)}
+
+
+@router.post("/memory")
+async def add_memory(request: MemoryRequest):
+    """添加记忆"""
+    from memory import memory_manager
+    memory_id = memory_manager.save_memory(
+        request.content, request.memory_type, 
+        request.importance, request.keywords
+    )
+    return {"id": memory_id, "message": "记忆已保存"}
+
+
+@router.delete("/memory/{memory_id}")
+async def delete_memory(memory_id: int):
+    """删除记忆"""
+    from memory import memory_manager
+    if memory_manager.delete_memory(memory_id):
+        return {"message": "记忆已删除"}
+    raise HTTPException(status_code=404, detail="记忆不存在")
+
+
+@router.get("/memory/search")
+async def search_memories(q: str, limit: int = 5):
+    """搜索记忆"""
+    from memory import memory_manager
+    return {"memories": memory_manager.search_memories(q, limit)}
+
+
+@router.get("/profile")
+async def get_profile():
+    """获取用户档案"""
+    from memory import memory_manager
+    return memory_manager.get_user_profile()
+
+
+@router.put("/profile/nickname")
+async def set_nickname(request: NicknameRequest):
+    """设置昵称"""
+    from memory import memory_manager
+    memory_manager.set_nickname(request.nickname)
+    return {"message": f"昵称已设置为「{request.nickname}」"}
+
+
+@router.put("/profile/affection")
+async def update_affection(request: AffectionRequest):
+    """更新好感度"""
+    from memory import memory_manager
+    new_affection = memory_manager.update_affection(request.delta)
+    return {"affection": new_affection}

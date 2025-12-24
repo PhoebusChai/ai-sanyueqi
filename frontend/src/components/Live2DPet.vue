@@ -1,36 +1,33 @@
 <template>
   <div class="pet-container" ref="containerRef" @mousedown="handleContainerClick">
-    <!-- 左侧气泡框 -->
-    <div class="speech-area" @click="hideControls">
-      <div class="speech-bubble" v-show="speechText && showBubble">
-        <span>{{ speechText }}</span>
-      </div>
+    <!-- 气泡框 - 左上角 -->
+    <div class="speech-bubble" v-show="speechText && showBubble" @click="hideControls">
+      <span>{{ speechText }}</span>
     </div>
 
-    <!-- 中间模型区域 -->
-    <div class="model-area" @mousedown="handleModelMouseDown" @contextmenu.prevent="toggleControls">
-      <canvas ref="canvasRef" class="live2d-canvas"></canvas>
-    </div>
+    <!-- Live2D 模型 - 居中 -->
+    <canvas ref="canvasRef" class="live2d-canvas" 
+      @mousedown="handleModelMouseDown" 
+      @contextmenu.prevent="toggleControls">
+    </canvas>
 
     <!-- 右侧菜单 -->
-    <div class="menu-area" @click.stop>
-      <div class="pet-controls" v-show="showControls">
-        <button class="control-btn" @click="toggleDrag" title="拖动开关">
-          <component :is="isDraggable ? Move : Lock" :size="18" />
-        </button>
-        <button class="control-btn" @click="nextMotion" title="切换动作">
-          <Play :size="18" />
-        </button>
-        <button class="control-btn" @click="nextExpression" title="切换表情">
-          <Smile :size="18" />
-        </button>
-        <button class="control-btn" @click="toggleInput" title="输入框开关">
-          <component :is="showInput ? EyeOff : Eye" :size="18" />
-        </button>
-      </div>
+    <div class="pet-controls" v-show="showControls" @click.stop>
+      <button class="control-btn" @click="toggleDrag" title="拖动开关">
+        <component :is="isDraggable ? Move : Lock" :size="iconSize" />
+      </button>
+      <button class="control-btn" @click="nextMotion" title="切换动作">
+        <Play :size="iconSize" />
+      </button>
+      <button class="control-btn" @click="nextExpression" title="切换表情">
+        <Smile :size="iconSize" />
+      </button>
+      <button class="control-btn" @click="toggleInput" title="输入框开关">
+        <component :is="showInput ? EyeOff : Eye" :size="iconSize" />
+      </button>
     </div>
 
-    <!-- 底部消息发送（覆盖在模型上方） -->
+    <!-- 底部消息发送 -->
     <div class="message-input-area" v-show="showInput" @click.stop>
       <input 
         type="text" 
@@ -40,14 +37,14 @@
         class="message-input"
       />
       <button class="send-btn" @click="sendMessage" :disabled="isLoading">
-        <Send :size="16" />
+        <Send :size="iconSize - 2" />
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Move, Lock, Play, Smile, Eye, EyeOff, Send } from 'lucide-vue-next'
 
 const containerRef = ref(null)
@@ -61,21 +58,17 @@ const inputMessage = ref('')
 const isLoading = ref(false)
 const currentMotionIndex = ref(0)
 const currentExpressionIndex = ref(0)
+const scaleFactor = ref(1)
 
-const API_BASE = 'http://localhost:8000'
+// 响应式图标大小
+const iconSize = computed(() => Math.max(14, Math.floor(18 * scaleFactor.value)))
+
+const API_BASE = 'http://localhost:8001'
 
 let model = null
 let appWindow = null
 let speechTimer = null
-
-const speeches = [
-  '你好呀！我是三月七~',
-  '今天也要元气满满哦！',
-  '有什么我能帮你的吗？',
-  '开拓者，要一起冒险吗？',
-  '记得按时休息哦~',
-  '三月七永远支持你！'
-]
+let pixiApp = null
 
 const showSpeech = (text, duration = 3000) => {
   if (speechTimer) clearTimeout(speechTimer)
@@ -129,7 +122,6 @@ const sendMessage = async () => {
       }
     }
     
-    // 回复完成后设置自动消失
     if (fullReply) {
       speechTimer = setTimeout(() => { speechText.value = '' }, 5000)
     }
@@ -174,21 +166,12 @@ const toggleDrag = () => {
   showSpeech(isDraggable.value ? '可以拖动啦~' : '固定位置了~')
 }
 
-const toggleInput = () => {
-  showInput.value = !showInput.value
-}
+const toggleInput = () => { showInput.value = !showInput.value }
+const toggleControls = () => { showControls.value = !showControls.value }
+const hideControls = () => { showControls.value = false }
 
-const toggleControls = () => {
-  showControls.value = !showControls.value
-}
-
-const hideControls = () => {
-  showControls.value = false
-}
-
-// 左键按下拖动（仅在拖动模式下）
 const handleModelMouseDown = async (e) => {
-  if (e.button !== 0) return // 只响应左键
+  if (e.button !== 0) return
   if (appWindow && isDraggable.value) {
     await appWindow.startDragging()
   }
@@ -197,11 +180,23 @@ const handleModelMouseDown = async (e) => {
 const handleContainerClick = async (e) => {
   if (e.button !== 0) return
   if (e.target.closest('.pet-controls') || e.target.closest('.control-btn')) return
-  if (e.target.closest('.model-area')) return
+  if (e.target.closest('.live2d-canvas')) return
   hideControls()
   if (appWindow && isDraggable.value) {
     await appWindow.startDragging()
   }
+}
+
+// 计算缩放因子
+const updateScaleFactor = () => {
+  const container = containerRef.value
+  if (!container) return
+  
+  const baseWidth = 500
+  const baseHeight = 540
+  const scaleX = container.clientWidth / baseWidth
+  const scaleY = container.clientHeight / baseHeight
+  scaleFactor.value = Math.min(scaleX, scaleY, 1.5) // 限制最大缩放
 }
 
 const initLive2D = async () => {
@@ -211,38 +206,64 @@ const initLive2D = async () => {
     
     Live2DModel.registerTicker(PIXI.Ticker)
     
-    // 使用高分辨率渲染，解决模糊问题
-    const dpr = window.devicePixelRatio || 1
-    const displayWidth = 320
-    const displayHeight = 450
+    const container = containerRef.value
+    const canvas = canvasRef.value
+    if (!container || !canvas) return
     
-    const app = new PIXI.Application({
-      view: canvasRef.value,
+    updateScaleFactor()
+    
+    const dpr = window.devicePixelRatio || 1
+    const canvasWidth = container.clientWidth
+    const canvasHeight = container.clientHeight
+    
+    pixiApp = new PIXI.Application({
+      view: canvas,
       transparent: true,
       autoStart: true,
-      width: displayWidth * dpr,
-      height: displayHeight * dpr,
+      width: canvasWidth * dpr,
+      height: canvasHeight * dpr,
       resolution: dpr,
       autoDensity: true
     })
 
-    // 三月七模型
     const modelUrl = '/model/sanyueqi/march7th.model3.json'
     
     model = await Live2DModel.from(modelUrl)
-    model.scale.set(0.06)
-    model.anchor.set(0.5, 0.35)
-    model.x = displayWidth / 2
-    model.y = displayHeight / 2
     
-    app.stage.addChild(model)
+    // 根据窗口大小计算模型缩放
+    const modelScale = 0.06 * scaleFactor.value
+    model.scale.set(modelScale)
+    model.anchor.set(0.5, 0.5)
+    model.x = canvasWidth / 2
+    model.y = canvasHeight / 2
+    
+    pixiApp.stage.addChild(model)
     
     model.on('hit', () => playMotion('tap'))
     showSpeech('你好呀！我是三月七~')
+    
+    window.addEventListener('resize', handleResize)
   } catch (error) {
     console.error('Live2D 加载失败:', error)
     showSpeech('模型加载中...')
   }
+}
+
+const handleResize = () => {
+  if (!pixiApp || !model || !containerRef.value) return
+  
+  updateScaleFactor()
+  
+  const dpr = window.devicePixelRatio || 1
+  const canvasWidth = containerRef.value.clientWidth
+  const canvasHeight = containerRef.value.clientHeight
+  
+  pixiApp.renderer.resize(canvasWidth * dpr, canvasHeight * dpr)
+  
+  const modelScale = 0.06 * scaleFactor.value
+  model.scale.set(modelScale)
+  model.x = canvasWidth / 2
+  model.y = canvasHeight / 2
 }
 
 onMounted(async () => {
@@ -252,45 +273,49 @@ onMounted(async () => {
   } catch (e) {}
   initLive2D()
 })
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
 </script>
 
 <style scoped>
 .pet-container {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   cursor: grab;
   position: relative;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
+  overflow: hidden;
 }
 
 .pet-container:active { cursor: grabbing; }
 
-/* 左侧气泡区域 */
-.speech-area {
-  flex: 1;
-  min-width: 110px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding-top: 80px;
-  padding-right: 8px;
-  flex-shrink: 0;
+/* Live2D Canvas - 全屏居中 */
+.live2d-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
 
+/* 气泡框 - 左上角 */
 .speech-bubble {
+  position: absolute;
+  top: 12%;
+  left: 8%;
   background: rgba(255, 182, 193, 0.5);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   padding: 10px 14px;
   border-radius: 16px;
-  font-size: 13px;
-  max-width: 100px;
+  font-size: clamp(11px, 2.5vw, 14px);
+  max-width: min(120px, 30vw);
   word-wrap: break-word;
   text-align: center;
   line-height: 1.4;
   color: white;
+  z-index: 10;
   animation: bubbleFadeIn 0.3s ease-out;
 }
 
@@ -299,38 +324,21 @@ onMounted(async () => {
   to { opacity: 1; transform: scale(1); }
 }
 
-/* 中间模型区域 */
-.model-area {
-  display: flex;
-  width: 220px;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-}
-
-.live2d-canvas {
-  width: 200px;
-  height: 450px;
-}
-
-/* 右侧菜单区域 */
-.menu-area {
-  width: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
+/* 右侧控制按钮 */
 .pet-controls {
+  position: absolute;
+  right: 8%;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: clamp(8px, 2vh, 12px);
+  z-index: 10;
 }
 
 .control-btn {
-  width: 36px;
-  height: 36px;
+  width: clamp(32px, 8vw, 40px);
+  height: clamp(32px, 8vw, 40px);
   border: none;
   background: rgba(255, 182, 193, 0.5);
   backdrop-filter: blur(8px);
@@ -348,23 +356,26 @@ onMounted(async () => {
   transform: scale(1.1);
 }
 
-/* 底部消息输入（绝对定位覆盖） */
+/* 底部消息输入 */
 .message-input-area {
   position: absolute;
-  bottom: 15px;
-  right: 12px;
+  bottom: 4%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: 8px;
+  width: 80%;
+  max-width: 350px;
+  z-index: 10;
 }
 
 .message-input {
-  width: 300px;
-  margin-left: 40px;
-  padding: 11px 14px;
+  flex: 1;
+  padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 16px);
   border: none;
-  border-radius: 18px;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.85);
-  font-size: 12px;
+  font-size: clamp(11px, 2.5vw, 13px);
   outline: none;
   color: #4a5568;
 }
@@ -374,8 +385,9 @@ onMounted(async () => {
 }
 
 .send-btn {
-  width: 36px;
-  height: 36px;
+  width: clamp(32px, 8vw, 40px);
+  height: clamp(32px, 8vw, 40px);
+  flex-shrink: 0;
   border: none;
   background: rgba(255, 182, 193, 0.5);
   backdrop-filter: blur(8px);

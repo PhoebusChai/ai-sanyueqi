@@ -42,43 +42,24 @@ def find_application(app_name: str) -> str | None:
     if app_lower in system_apps:
         return system_apps[app_lower]
     
-    # 搜索路径
-    search_paths = [
-        os.path.expandvars(r"%ProgramFiles%"),
-        os.path.expandvars(r"%ProgramFiles(x86)%"),
-        os.path.expandvars(r"%LocalAppData%"),
-        os.path.expandvars(r"%AppData%"),
-        os.path.expandvars(r"%UserProfile%\Desktop"),
-    ]
-    
-    # 关键词映射
+    # 关键词映射（包含中英文）
     keywords = {
-        "微信": ["wechat", "weixin"], "wechat": ["wechat", "weixin"],
+        "微信": ["微信", "wechat", "weixin"], "wechat": ["微信", "wechat", "weixin"],
         "qq": ["qq", "tencent"], "chrome": ["chrome", "google"],
         "edge": ["msedge", "edge"], "firefox": ["firefox", "mozilla"],
         "vscode": ["code", "vscode"], "idea": ["idea", "intellij"],
-        "pycharm": ["pycharm"], "钉钉": ["dingtalk"], "飞书": ["feishu", "lark"],
-        "网易云": ["cloudmusic", "netease"], "spotify": ["spotify"],
+        "pycharm": ["pycharm"], "钉钉": ["钉钉", "dingtalk"], 
+        "飞书": ["飞书", "feishu", "lark"], "feishu": ["飞书", "feishu", "lark"],
+        "网易云": ["网易云", "cloudmusic", "netease"], "spotify": ["spotify"],
         "steam": ["steam"], "discord": ["discord"], "telegram": ["telegram"],
         "word": ["winword", "word"], "excel": ["excel"],
         "ppt": ["powerpnt", "powerpoint"], "outlook": ["outlook"],
     }
     
-    search_keywords = keywords.get(app_lower, [app_lower])
+    # 搜索关键词：优先用原始输入名称
+    search_keywords = keywords.get(app_lower, [app_name, app_lower])
     
-    for base_path in search_paths:
-        if not os.path.exists(base_path):
-            continue
-        for keyword in search_keywords:
-            pattern = os.path.join(base_path, "**", f"*{keyword}*.exe")
-            for match in glob.glob(pattern, recursive=True):
-                if "unins" not in match.lower() and "update" not in match.lower():
-                    return match
-            pattern = os.path.join(base_path, "**", f"*{keyword}*.lnk")
-            for match in glob.glob(pattern, recursive=True):
-                return match
-    
-    # 搜索开始菜单
+    # 优先搜索开始菜单（最快）
     start_menu_paths = [
         os.path.expandvars(r"%ProgramData%\Microsoft\Windows\Start Menu\Programs"),
         os.path.expandvars(r"%AppData%\Microsoft\Windows\Start Menu\Programs"),
@@ -90,6 +71,35 @@ def find_application(app_name: str) -> str | None:
             pattern = os.path.join(base_path, "**", f"*{keyword}*.lnk")
             for match in glob.glob(pattern, recursive=True):
                 return match
+    
+    # 搜索桌面快捷方式
+    desktop = os.path.expandvars(r"%UserProfile%\Desktop")
+    if os.path.exists(desktop):
+        for keyword in search_keywords:
+            pattern = os.path.join(desktop, f"*{keyword}*.lnk")
+            for match in glob.glob(pattern):
+                return match
+    
+    # 最后搜索常用安装目录（限制深度）
+    quick_paths = [
+        os.path.expandvars(r"%LocalAppData%\Programs"),
+        os.path.expandvars(r"%ProgramFiles%"),
+        os.path.expandvars(r"%ProgramFiles(x86)%"),
+    ]
+    for base_path in quick_paths:
+        if not os.path.exists(base_path):
+            continue
+        for keyword in search_keywords:
+            # 只搜索两层深度
+            for subdir in os.listdir(base_path):
+                subpath = os.path.join(base_path, subdir)
+                if not os.path.isdir(subpath):
+                    continue
+                if keyword.lower() in subdir.lower():
+                    # 找到匹配目录，搜索其中的exe
+                    for f in glob.glob(os.path.join(subpath, "**", "*.exe"), recursive=True):
+                        if "unins" not in f.lower() and "update" not in f.lower():
+                            return f
     
     return None
 

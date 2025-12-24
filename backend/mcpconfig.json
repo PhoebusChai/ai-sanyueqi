@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "system": {
-      "baseUrl": "http://localhost:8001",
+      "baseUrl": "http://localhost:8002",
       "tools": [
         {
           "name": "get_system_time",
@@ -147,6 +147,38 @@
             "folder_path": {
               "type": "string",
               "description": "要创建的文件夹完整路径，如 D:\\projects\\new_folder"
+            }
+          }
+        },
+        {
+          "name": "write_file",
+          "description": "写入内容到文件。当用户说'把xxx写入文件'、'保存内容到xxx'、'在文件里添加xxx'等需要写入文件时使用。支持覆盖写入和追加写入两种模式。",
+          "endpoint": "/file/write",
+          "method": "POST",
+          "parameters": {
+            "file_path": {
+              "type": "string",
+              "description": "要写入的文件完整路径"
+            },
+            "content": {
+              "type": "string",
+              "description": "要写入的内容"
+            },
+            "mode": {
+              "type": "string",
+              "description": "写入模式：overwrite(覆盖，默认) 或 append(追加)"
+            }
+          }
+        },
+        {
+          "name": "delete_file",
+          "description": "删除文件。当用户说'删除xxx文件'、'把xxx文件删掉'等需要删除文件时使用。",
+          "endpoint": "/file/delete",
+          "method": "DELETE",
+          "parameters": {
+            "file_path": {
+              "type": "string",
+              "description": "要删除的文件完整路径"
             }
           }
         }

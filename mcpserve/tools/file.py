@@ -29,6 +29,12 @@ class ReadFileRequest(BaseModel):
     max_size: int = 102400  # 默认最大读取100KB
 
 
+class WriteFileRequest(BaseModel):
+    file_path: str
+    content: str
+    mode: str = "overwrite"  # overwrite 或 append
+
+
 def get_default_search_paths() -> list:
     """获取默认搜索路径"""
     user_profile = os.path.expandvars(r"%UserProfile%")
@@ -175,3 +181,59 @@ async def read_file(request: ReadFileRequest):
         return {"success": False, "message": "文件不是文本文件，无法读取"}
     except Exception as e:
         return {"success": False, "message": f"读取文件失败: {str(e)}"}
+
+
+
+@router.post("/write")
+async def write_file(request: WriteFileRequest):
+    """写入文件内容"""
+    file_path = request.file_path
+    
+    # 确保父目录存在
+    parent_dir = os.path.dirname(file_path)
+    if parent_dir and not os.path.exists(parent_dir):
+        try:
+            os.makedirs(parent_dir)
+        except Exception as e:
+            return {"success": False, "message": f"创建目录失败: {str(e)}"}
+    
+    try:
+        # 根据模式选择写入方式
+        if request.mode == "append":
+            write_mode = "a"
+        else:
+            write_mode = "w"
+        
+        with open(file_path, write_mode, encoding="utf-8") as f:
+            f.write(request.content)
+        
+        file_size = os.path.getsize(file_path)
+        
+        return {
+            "success": True,
+            "message": f"已{'追加' if request.mode == 'append' else '写入'}文件: {os.path.basename(file_path)}",
+            "path": file_path,
+            "size": file_size
+        }
+    except Exception as e:
+        return {"success": False, "message": f"写入文件失败: {str(e)}"}
+
+
+@router.delete("/delete")
+async def delete_file(file_path: str):
+    """删除文件"""
+    if not os.path.exists(file_path):
+        return {"success": False, "message": f"文件不存在: {file_path}"}
+    
+    if not os.path.isfile(file_path):
+        return {"success": False, "message": f"不是文件: {file_path}"}
+    
+    try:
+        os.remove(file_path)
+        return {
+            "success": True,
+            "message": f"已删除文件: {os.path.basename(file_path)}",
+            "path": file_path
+        }
+    except Exception as e:
+        return {"success": False, "message": f"删除文件失败: {str(e)}"}

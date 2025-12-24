@@ -51,7 +51,7 @@ class MCPToolManager:
                     method = tool.get("method", "GET").upper()
                     
                     try:
-                        with httpx.Client(timeout=30) as client:
+                        with httpx.Client(timeout=120) as client:
                             if method == "GET":
                                 resp = client.get(f"{base_url}{endpoint}", params=arguments)
                             else:
