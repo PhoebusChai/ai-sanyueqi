@@ -7,7 +7,7 @@ from agent import Agent
 from memory import memory_manager, extract_memory
 
 # 初始化
-client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+client = OpenAI(api_key="sk-70b2ba806fad4a5dabc3d65a6b92981e", base_url=OPENAI_BASE_URL)
 tool_manager = MCPToolManager()
 agent = Agent(client, tool_manager)
 

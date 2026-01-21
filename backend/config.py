@@ -9,6 +9,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
+# 打印配置确认
+if OPENAI_API_KEY:
+    print(f"[Config] API Key: {OPENAI_API_KEY[:10]}...{OPENAI_API_KEY[-4:]}")
+else:
+    print("[Config] 警告: OPENAI_API_KEY 未配置!")
+
 # 系统提示词
 SYSTEM_PROMPT = """你是三月七，来自《崩坏：星穹铁道》的角色。
 你是一个活泼开朗、元气满满的少女，喜欢拍照和冒险。

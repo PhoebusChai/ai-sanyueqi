@@ -1,10 +1,11 @@
 """API 路由模块"""
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 
 from config import OPENAI_API_KEY
 import services
+from tts_service import tts_service
 
 router = APIRouter()
 
@@ -150,3 +151,145 @@ async def update_affection(request: AffectionRequest):
     from memory import memory_manager
     new_affection = memory_manager.update_affection(request.delta)
     return {"affection": new_affection}
+
+
+# ========== TTS 语音合成 API ==========
+
+class TTSRequest(BaseModel):
+    text: str
+
+
+@router.post("/tts")
+async def text_to_speech(request: TTSRequest):
+    """文本转语音"""
+    try:
+        audio_data = await tts_service.synthesize_async(request.text)
+        return Response(
+            content=audio_data,
+            media_type="audio/wav",
+            headers={"Content-Disposition": "inline; filename=speech.wav"}
+        )
+    except Exception as e:
+        print(f"[TTS 错误]: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chat/voice")
+async def chat_with_voice(request: ChatRequest):
+    """聊天并返回语音 (非流式)"""
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OpenAI API Key 未配置")
+
+    try:
+        # 获取 AI 回复
+        reply = services.chat(request.message)
+
+        # 合成语音
+        audio_data = await tts_service.synthesize_async(reply)
+
+        # 返回 JSON + Base64 音频
+        import base64
+        audio_base64 = base64.b64encode(audio_data).decode()
+
+        return {
+            "reply": reply,
+            "audio": audio_base64,
+            "audio_type": "wav"
+        }
+    except Exception as e:
+        print(f"[错误]: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chat/voice/stream")
+async def chat_with_voice_stream(request: ChatRequest):
+    """
+    流式语音聊天：LLM 流式输出 + 逐句 TTS
+    
+    返回格式 (SSE):
+    - data: {"type": "text", "content": "文本内容"}
+    - data: {"type": "audio", "content": "base64音频", "sentence": "对应文本"}
+    - data: {"type": "done"}
+    """
+    import base64
+    import json
+    import asyncio
+    
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OpenAI API Key 未配置")
+
+    async def generate():
+        try:
+            buffer = ""
+            full_reply = ""
+            sentence_end = tts_service._sentence_end
+            
+            # 获取 LLM 流式输出
+            for content in services.chat_stream(request.message):
+                if content == "[思考完成]":
+                    continue
+                
+                buffer += content
+                full_reply += content
+                
+                # 发送文本
+                yield f"data: {json.dumps({'type': 'text', 'content': content}, ensure_ascii=False)}\n\n"
+                
+                # 检查是否有完整句子
+                sentences = tts_service.split_sentences(buffer)
+                
+                if len(sentences) > 1:
+                    # 合成完整的句子
+                    for sentence in sentences[:-1]:
+                        if sentence.strip():
+                            # 在线程池中合成
+                            loop = asyncio.get_event_loop()
+                            audio = await loop.run_in_executor(
+                                None,
+                                tts_service._synthesize_single,
+                                sentence
+                            )
+                            if audio:
+                                audio_b64 = base64.b64encode(audio).decode()
+                                yield f"data: {json.dumps({'type': 'audio', 'content': audio_b64, 'sentence': sentence}, ensure_ascii=False)}\n\n"
+                    
+                    # 保留最后一个不完整的部分
+                    last = sentences[-1]
+                    if sentence_end.search(last):
+                        # 最后一个也是完整句子
+                        loop = asyncio.get_event_loop()
+                        audio = await loop.run_in_executor(
+                            None,
+                            tts_service._synthesize_single,
+                            last
+                        )
+                        if audio:
+                            audio_b64 = base64.b64encode(audio).decode()
+                            yield f"data: {json.dumps({'type': 'audio', 'content': audio_b64, 'sentence': last}, ensure_ascii=False)}\n\n"
+                        buffer = ""
+                    else:
+                        buffer = last
+            
+            # 处理剩余文本
+            if buffer.strip():
+                loop = asyncio.get_event_loop()
+                audio = await loop.run_in_executor(
+                    None,
+                    tts_service._synthesize_single,
+                    buffer
+                )
+                if audio:
+                    audio_b64 = base64.b64encode(audio).decode()
+                    yield f"data: {json.dumps({'type': 'audio', 'content': audio_b64, 'sentence': buffer}, ensure_ascii=False)}\n\n"
+            
+            yield f"data: {json.dumps({'type': 'done', 'full_reply': full_reply}, ensure_ascii=False)}\n\n"
+            
+        except Exception as e:
+            print(f"\n[错误]: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+    )

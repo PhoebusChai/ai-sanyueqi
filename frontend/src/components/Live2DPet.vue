@@ -22,6 +22,9 @@
       <button class="control-btn" @click="nextExpression" title="切换表情">
         <Smile :size="iconSize" />
       </button>
+      <button class="control-btn" @click="toggleVoice" title="语音开关">
+        <component :is="voiceEnabled ? Volume2 : VolumeX" :size="iconSize" />
+      </button>
       <button class="control-btn" @click="toggleInput" title="输入框开关">
         <component :is="showInput ? EyeOff : Eye" :size="iconSize" />
       </button>
@@ -45,7 +48,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Move, Lock, Play, Smile, Eye, EyeOff, Send } from 'lucide-vue-next'
+import { Move, Lock, Play, Smile, Eye, EyeOff, Send, Volume2, VolumeX } from 'lucide-vue-next'
 
 const containerRef = ref(null)
 const canvasRef = ref(null)
@@ -59,6 +62,7 @@ const isLoading = ref(false)
 const currentMotionIndex = ref(0)
 const currentExpressionIndex = ref(0)
 const scaleFactor = ref(1)
+const voiceEnabled = ref(true)  // 语音开关
 
 // 响应式图标大小
 const iconSize = computed(() => Math.max(14, Math.floor(18 * scaleFactor.value)))
@@ -69,12 +73,137 @@ let model = null
 let appWindow = null
 let speechTimer = null
 let pixiApp = null
+let audioContext = null
+let lipSyncAnimationId = null
 
 const showSpeech = (text, duration = 3000) => {
   if (speechTimer) clearTimeout(speechTimer)
   speechText.value = text
   if (duration > 0) {
     speechTimer = setTimeout(() => { speechText.value = '' }, duration)
+  }
+}
+
+// ========== 语音播放与口型同步 ==========
+
+// 初始化音频上下文
+const initAudioContext = () => {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)()
+  }
+  return audioContext
+}
+
+// 播放音频并同步口型
+const playAudioWithLipSync = async (audioBase64) => {
+  try {
+    const ctx = initAudioContext()
+    
+    // 解码 Base64 音频
+    const audioData = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0))
+    const audioBuffer = await ctx.decodeAudioData(audioData.buffer)
+    
+    // 创建音频源和分析器
+    const source = ctx.createBufferSource()
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 256
+    
+    source.buffer = audioBuffer
+    source.connect(analyser)
+    analyser.connect(ctx.destination)
+    
+    // 开始口型同步
+    startLipSync(analyser)
+    
+    // 播放结束后停止口型
+    source.onended = () => {
+      stopLipSync()
+    }
+    
+    source.start(0)
+  } catch (error) {
+    console.error('音频播放失败:', error)
+  }
+}
+
+// 开始口型同步动画
+const startLipSync = (analyser) => {
+  const dataArray = new Uint8Array(analyser.frequencyBinCount)
+  
+  const updateLipSync = () => {
+    analyser.getByteFrequencyData(dataArray)
+    
+    // 计算音量 (取低频部分的平均值，更适合人声)
+    let sum = 0
+    for (let i = 0; i < 32; i++) {
+      sum += dataArray[i]
+    }
+    const volume = sum / 32 / 255  // 归一化到 0-1
+    
+    // 更新 Live2D 口型参数
+    if (model && model.internalModel && model.internalModel.coreModel) {
+      const coreModel = model.internalModel.coreModel
+      // 尝试不同的口型参数名
+      const mouthParams = ['ParamMouthOpenY', 'PARAM_MOUTH_OPEN_Y', 'ParamMouthOpen']
+      for (const param of mouthParams) {
+        try {
+          coreModel.setParameterValueById(param, volume * 1.2)
+        } catch (e) {}
+      }
+    }
+    
+    lipSyncAnimationId = requestAnimationFrame(updateLipSync)
+  }
+  
+  updateLipSync()
+}
+
+// 停止口型同步
+const stopLipSync = () => {
+  if (lipSyncAnimationId) {
+    cancelAnimationFrame(lipSyncAnimationId)
+    lipSyncAnimationId = null
+  }
+  
+  // 重置口型
+  if (model && model.internalModel && model.internalModel.coreModel) {
+    const coreModel = model.internalModel.coreModel
+    const mouthParams = ['ParamMouthOpenY', 'PARAM_MOUTH_OPEN_Y', 'ParamMouthOpen']
+    for (const param of mouthParams) {
+      try {
+        coreModel.setParameterValueById(param, 0)
+      } catch (e) {}
+    }
+  }
+}
+
+// 切换语音开关
+const toggleVoice = () => {
+  voiceEnabled.value = !voiceEnabled.value
+  showSpeech(voiceEnabled.value ? '语音已开启~' : '语音已关闭')
+}
+
+// 音频播放队列
+let audioQueue = []
+let isPlayingAudio = false
+
+// 播放队列中的下一个音频
+const playNextAudio = async () => {
+  if (isPlayingAudio || audioQueue.length === 0) return
+  
+  isPlayingAudio = true
+  const { audio, sentence } = audioQueue.shift()
+  
+  try {
+    await playAudioWithLipSync(audio)
+  } catch (e) {
+    console.error('播放音频失败:', e)
+  }
+  
+  isPlayingAudio = false
+  // 继续播放下一个
+  if (audioQueue.length > 0) {
+    playNextAudio()
   }
 }
 
@@ -86,44 +215,93 @@ const sendMessage = async () => {
   inputMessage.value = ''
   isLoading.value = true
   showSpeech('思考中...', 0)
+  audioQueue = []
+  isPlayingAudio = false
   
   try {
-    const response = await fetch(`${API_BASE}/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
-    })
-    
-    if (!response.ok) throw new Error('请求失败')
-    
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let fullReply = ''
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+    // 如果开启语音，使用语音接口（非流式）
+    if (voiceEnabled.value) {
+      const response = await fetch(`${API_BASE}/chat/voice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      })
       
-      const chunk = decoder.decode(value)
-      const lines = chunk.split('\n')
+      if (!response.ok) throw new Error('请求失败')
       
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') {
-            playMotion('tap')
-          } else if (data.startsWith('[ERROR]')) {
-            showSpeech('出错了呢...')
-          } else {
-            fullReply += data
-            showSpeech(fullReply, 0)
+      const data = await response.json()
+      
+      // 显示文本
+      showSpeech(data.reply, 0)
+      
+      // 播放音频
+      if (data.audio) {
+        const audioBlob = new Blob(
+          [Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))],
+          { type: 'audio/wav' }
+        )
+        const audioUrl = URL.createObjectURL(audioBlob)
+        const audio = new Audio(audioUrl)
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl)
+          playMotion('tap')
+          speechTimer = setTimeout(() => { speechText.value = '' }, 5000)
+        }
+        
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl)
+          speechTimer = setTimeout(() => { speechText.value = '' }, 5000)
+        }
+        
+        audio.play().catch(e => {
+          console.error('音频播放失败:', e)
+          speechTimer = setTimeout(() => { speechText.value = '' }, 5000)
+        })
+      } else {
+        playMotion('tap')
+        speechTimer = setTimeout(() => { speechText.value = '' }, 5000)
+      }
+      
+    } else {
+      // 不开启语音时使用流式接口
+      const response = await fetch(`${API_BASE}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      })
+      
+      if (!response.ok) throw new Error('请求失败')
+      
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullReply = ''
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') {
+              playMotion('tap')
+            } else if (data.startsWith('[ERROR]')) {
+              showSpeech('出错了呢...')
+            } else {
+              fullReply += data
+              showSpeech(fullReply, 0)
+            }
           }
         }
       }
-    }
-    
-    if (fullReply) {
-      speechTimer = setTimeout(() => { speechText.value = '' }, 5000)
+      
+      if (fullReply) {
+        speechTimer = setTimeout(() => { speechText.value = '' }, 5000)
+      }
     }
   } catch (error) {
     console.error('发送消息失败:', error)
@@ -276,6 +454,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  stopLipSync()
+  if (audioContext) {
+    audioContext.close()
+  }
 })
 </script>
 
